@@ -34,6 +34,9 @@ namespace ClusterExperiment
       txtRCluster.Text = (string)Registry.GetValue(keyName, "ReinforcementsCluster", "");
       txtNumWorkers.Text = (string)Registry.GetValue(keyName, "ReinforcementsNumWorkers", "");
       cmbPriority.SelectedIndex = (int)Registry.GetValue(keyName, "ReinforcementsPriority", (int)2);
+      txtJobTemplate.Text = (string)Registry.GetValue(keyName, "ReinforcementsJobTemplate", "");
+      timeJob.Value = new TimeSpan(0, 0, (int)Registry.GetValue(keyName, "ReinforcementsJobTimeout", 43200));
+      timeTask.Value = new TimeSpan(0, 0, (int)Registry.GetValue(keyName, "ReinforcementsTaskTimeout", 0));
     }
 
     private void okButton_Click(object sender, RoutedEventArgs e)
@@ -41,7 +44,9 @@ namespace ClusterExperiment
       Registry.SetValue(keyName, "ReinforcementsCluster", txtRCluster.Text, RegistryValueKind.String);
       Registry.SetValue(keyName, "ReinforcementsNumWorkers", txtNumWorkers.Text, RegistryValueKind.String);
       Registry.SetValue(keyName, "ReinforcementsPriority", cmbPriority.SelectedIndex, RegistryValueKind.DWord);
-
+      Registry.SetValue(keyName, "ReinforcementsJobTemplate", txtJobTemplate.Text, RegistryValueKind.String);
+      Registry.SetValue(keyName, "ReinforcementsJobTimeout", (timeJob.Value.HasValue ? Convert.ToInt32(timeJob.Value.Value.TotalSeconds) : 0), RegistryValueKind.DWord);
+      Registry.SetValue(keyName, "ReinforcementsTaskTimeout", (timeTask.Value.HasValue ? Convert.ToInt32(timeTask.Value.Value.TotalSeconds) : 0), RegistryValueKind.DWord);
       DialogResult = true;
     }
 

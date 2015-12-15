@@ -1,3 +1,4 @@
+# Copyright (c) 2015 Microsoft Corporation
 # Test for big machines that have
 #   Java and clang installed
 #   lots of frees space
@@ -7,15 +8,15 @@ import datetime
 import sys
 
 def bigtest():
-    print "BUILD DATE:", datetime.date.today()
+    print("BUILD DATE: %s" % datetime.date.today())
     sys.stdout.flush()
     # Build everything:
     #   - using clang and g++
     #   - release and debug modes
-    for b in ['unstable']:
+    for b in ['master']:
         for d in [True, False]:
             for c in [True, False]:
-                util.buildz3(branch=b, everything=True, clean=True, debug=d,  java=True, static=True, jobs=config.NUMJOBS, clang=c)
+                util.buildz3(branch=b, everything=True, clean=True, debug=d, dotnet=True, java=True, static=True, jobs=config.NUMJOBS, clang=c)
                 util.testz3py(branch=b, debug=d, clang=c)
                 util.testjavaex(branch=b, debug=d, clang=c)
                 util.testz3ex('cpp_example', branch=b, debug=d, clang=c)
@@ -27,7 +28,7 @@ def bigtest():
                     util.test_pyscripts_using_latest('regressions/python', branch=b, debug=d, clang=c)
             if util.is_windows():
                 util.test_cs_using_latest('regressions/cs', branch=b, debug=d, clang=False)
-    util.buildz3(branch='mcsat', everything=True, clean=True, debug=True,  java=False, static=False, jobs=config.NUMJOBS, clang=False)
+    util.buildz3(branch='mcsat', everything=True, clean=True, debug=True, dotnet=False, java=False, static=False, jobs=config.NUMJOBS, clang=False)
 #   util.buildz3(branch='tptp', everything=True, clean=True, debug=True,  java=False, static=False, jobs=config.NUMJOBS, clang=False)
     util.test_pyscripts_using_latest('regressions/mcsat', branch='mcsat', debug=True, clang=False)
     util.test_benchmarks_using_latest('regressions/mcsat_smt2', branch='mcsat', debug=True, clang=False)

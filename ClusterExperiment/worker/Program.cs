@@ -15,6 +15,18 @@ namespace worker
 {
     class Program
     {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool CopyFile(string lpFileNameFrom, string lpFileNameTo, bool failIfExists);
+
+        public static void LongFileNameCopy(string from, string to, bool failIfExists = true)
+        {
+            string f = (from.StartsWith("\\")) ? @"\\?\UNC" + from.Substring(1) : (@"\\?\" + from);
+            string t = (to.StartsWith("\\")) ? @"\\?\UNC" + to.Substring(1) : (@"\\?\" + to);
+            if (!CopyFile(f, t, failIfExists))
+                throw new Exception("Could not copy benchmark " + from);
+        }
+
         SqlConnection sql = null;
         string myName = "";
         const int MAXBUF = 16777216;
@@ -417,8 +429,8 @@ namespace worker
 
                     foreach (PackagePart part in pkg.GetParts())
                     {
-                        // Uri uriDocumentTarget = PackUriHelper.ResolvePartUri(new Uri("/", UriKind.Relative), rel.TargetUri);            
-                        // PackagePart part = pkg.GetPart(uriDocumentTarget);           
+                        // Uri uriDocumentTarget = PackUriHelper.ResolvePartUri(new Uri("/", UriKind.Relative), rel.TargetUri);
+                        // PackagePart part = pkg.GetPart(uriDocumentTarget);
                         Stream s = part.GetStream(FileMode.Open, FileAccess.Read);
                         string fn = CreateFilenameFromUri(part.Uri).Substring(1);
                         fs = new FileStream(e.localDir + @"\" + fn, FileMode.OpenOrCreate);
@@ -475,8 +487,8 @@ namespace worker
             // Process time
             return p.TotalProcessorTime;
 
-            // Complicated multi-process time. Note that sub-processes may be unavailable after the main process has exited. 
-            //TimeSpan r = new TimeSpan(0);      
+            // Complicated multi-process time. Note that sub-processes may be unavailable after the main process has exited.
+            //TimeSpan r = new TimeSpan(0);
 
             //foreach (Process cp in Process.GetProcessesByName(p.ProcessName))
             //  r += cp.TotalProcessorTime;
@@ -556,76 +568,6 @@ namespace worker
             catch { }
         }
 
-
-        // Try the following?
-        //private string ConvertToString(char[] buffer, int count)
-        //{
-        //    StringBuilder data = new StringBuilder(buffer.Length);
-
-        //    for (int i = 0; i < count; i++)
-        //    {
-        //        data.Append(buffer[i]);
-        //    }
-
-        //    return data.ToString();
-        //}
-
-        //void replace_checksat(Experiment e, Job j)
-        //{
-        //    string fn = j.localFilename;
-        //    string tr = "(check-sat)";
-        //    string rp = e.custom_check_sat;
-        //    int cl = tr.Length;
-
-        //    int ll = cl + rp.Length;
-        //    char[] buffer = new char[ll];
-
-        //    int index = 0;
-        //    int rl = tr.Length;
-
-        //    StreamReader streamReader = new StreamReader(fn);
-        //    StreamWriter streamWriter = new StreamWriter(fn + ".tmp");
-
-        //    while (true)
-        //    {
-        //        streamReader.DiscardBufferedData();
-        //        streamReader.BaseStream.Seek(index, SeekOrigin.Begin);
-        //        int count = streamReader.ReadBlock(buffer, 0, ll);
-        //        if (count == 0) break;
-
-        //        string data = ConvertToString(buffer, count);
-        //        bool isEndReplaced = false;
-        //        if (count >= cl)
-        //            isEndReplaced = (data.LastIndexOf(tr, cl) > 0);
-
-        //        data = data.Replace(tr, rp);
-        //        if (isEndReplaced)
-        //        {
-        //            streamWriter.Write(data);
-        //            index += count;
-        //        }
-        //        else
-        //        {
-        //            if (count >= cl)
-        //            {
-        //                streamWriter.Write(data.Substring(0, data.Length - rl));
-        //                index += cl;
-        //            }
-        //            else
-        //            {
-        //                streamWriter.Write(data);
-        //                index += cl;
-        //            }
-        //        }
-        //    }
-
-        //    streamReader.Close();
-        //    streamWriter.Close();
-
-        //    File.Delete(fn);
-        //    File.Move(fn + ".tmp", fn);
-        //}
-
         void runJob(Experiment e, Job j)
         {
         retry_from_scratch:
@@ -640,7 +582,7 @@ namespace worker
                 try
                 {
                     // Console.WriteLine("Running job #" + j.ID);
-                    File.Copy(j.filename, j.localFilename, true);
+                    LongFileNameCopy(j.filename, j.localFilename, false);
                     if (e.custom_check_sat != null)
                         replace_checksat(e, j);
                 }
@@ -748,8 +690,11 @@ namespace worker
 
                 int excode = p.ExitCode;
 
+                // CMW: Are these exit codes reliable?
                 if (excode == -1073741515)
                     logInfrastructureError(j, "Binary could not be executed.");
+                else if (excode == -1073741571)
+                    exhausted_memory = true; // .NET StackOverflowException
 
                 double runtime = (exhausted_time ? e.timeout.TotalSeconds : processTime(p).TotalSeconds);
 
@@ -801,7 +746,7 @@ namespace worker
             }
             catch (Exception)
             {
-                // OK, this can happen for bogus filenames, etc. 
+                // OK, this can happen for bogus filenames, etc.
             }
 
             return res;
@@ -815,30 +760,43 @@ namespace worker
             while (!reader.EndOfStream)
             {
                 string l = reader.ReadLine(); // does not contain \r\n
-                if (l == "sat" || l == "SAT" || l == "SATISFIABLE") // || l == "VERIFICATION FAILED")
+                l.TrimEnd(' ');
+                if (l == "sat" || l == "SAT" || l == "SATISFIABLE" || l == "s SATISFIABLE" || l == "SuccessfulRuns = 1") // || l == "VERIFICATION FAILED")
                     res.sat++;
-                else if (l == "unsat" || l == "UNSAT" || l == "UNSATISFIABLE") // || l == "VERIFICATION SUCCESSFUL")
+                else if (l == "unsat" || l == "UNSAT" || l == "UNSATISFIABLE" || l == "s UNSATISFIABLE") // || l == "VERIFICATION SUCCESSFUL")
                     res.unsat++;
                 else if (l == "unknown" || l == "UNKNOWN" || l == "INDETERMINATE")
                     res.other++;
             }
+
+            //Regex re = new Regex(@"\(restarts: ([0-9]+) flips: ([0-9]+) fps: ([0-9.]+)\)");
+
+            //reader = new StreamReader(r.stderr);
+            //r.stderr.Seek(0, SeekOrigin.Begin);
+            //while (!reader.EndOfStream)
+            //{
+            //    Match m = re.Match(reader.ReadLine());
+            //    if (m.Success)
+            //        res.other += Convert.ToUInt32(m.Groups[2].Value);
+            //}
+
             return res;
         }
 
         //int getSATorUNSATcode(string filename) {
         //  FileStream f = File.Open(filename, System.IO.FileMode.Open, System.IO.FileAccess.Read);
         //  StreamReader r = new StreamReader(f);
-        //  int res = -1;      
+        //  int res = -1;
 
         //  while (!r.EndOfStream && res == -1)
         //  {
         //    string l = r.ReadLine(); // does not contain \r\n
         //    if (l == ("sat"))
-        //      res = 0; 
+        //      res = 0;
         //    else if (l == ("unsat"))
         //      res = 1;
         //    else if (l == ("unknown"))
-        //      res = 2; 
+        //      res = 2;
         //  }
 
         //  r.Close();
@@ -866,6 +824,8 @@ namespace worker
                 if (l.StartsWith("(error") &&
                     l.Contains("check annotation"))
                     res = 3;
+                else if (l.StartsWith("(error \"out of memory\")"))
+                    res = 6;
             }
             return (res == -1) ? 4 : res; // no bug found means general error.
         }
@@ -915,7 +875,7 @@ namespace worker
             SqlParameter out_param = cmd.Parameters.Add("@STDOUT", System.Data.SqlDbType.VarChar);
             SqlParameter err_param = cmd.Parameters.Add("@STDERR", System.Data.SqlDbType.VarChar);
 
-            //if (true)
+            // if (true)
             if (resultCode >= 3)
             {
                 r.stdout.Seek(0, SeekOrigin.Begin);
@@ -1098,7 +1058,7 @@ namespace worker
                 return 1;
 
             try
-            {                
+            {
                 Console.CancelKeyPress += delegate
                 {
                     Console.WriteLine("Worker was interrupted. Removing entries from jobqueue.");
@@ -1136,7 +1096,7 @@ namespace worker
                 }
                 else // (args.Count() == 1)
                 {
-                    while (true) // Any-experiment job.                    
+                    while (true) // Any-experiment job.
                     {
                         ensureConnected();
                         Dictionary<string, Object> r =

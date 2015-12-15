@@ -1,3 +1,4 @@
+# Copyright (c) 2015 Microsoft Corporation
 import smtplib
 import csv
 from datetime import datetime, timedelta
@@ -34,8 +35,8 @@ def send(recipients, subject, body, files=[]):
 
     smtp.sendmail(config.SENDER, recipients, mail.as_string())
     smtp.quit()  
-    print "Sent to ", 
-    print recipients
+    print("Sent to ")
+    print(recipients)
 
 if __name__ == "__main__":
     send_happybirthday(["leonardo@microsoft.com"])

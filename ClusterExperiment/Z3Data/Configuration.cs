@@ -29,6 +29,9 @@ namespace Z3Data
         public string note = "";
         public string minResources = "";
         public string maxResources = "";
+        public string jobTemplate = "";
+        public int jobTimeout = 43200;
+        public int taskTimeout = 0;
 
         // Where is Z3?
         public string z3_drop_dir = "";
@@ -85,6 +88,10 @@ namespace Z3Data
                                             throw new Exception("Invalid cluster config");
                                         minResources = reader.GetAttribute("minResources");
                                         maxResources = reader.GetAttribute("maxResources");
+                                        jobTemplate = reader.GetAttribute("jobTemplate");
+                                        jobTimeout = Convert.ToInt32(reader.GetAttribute("jobTimeout"));
+                                        taskTimeout = Convert.ToInt32(reader.GetAttribute("taskTimeout"));
+                                        priority = Convert.ToInt32(reader.GetAttribute("priority"));
                                     }
                                     break;
                                 case "AlternativeCluster":

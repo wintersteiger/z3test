@@ -1,3 +1,9 @@
+
+/*++
+Copyright (c) 2015 Microsoft Corporation
+
+--*/
+
 using Microsoft.Z3;
 using System;
       
@@ -13,6 +19,12 @@ class TestDriver
     {
         if (e.ToString() != s)
             throw new TestFailedException("strings don't match");
+    }
+
+    public static void CheckAssertion(string s, bool f)
+    {
+        if(!f)
+           throw new TestFailedException(string.Format("Assertion failed {0}", s));
     }
 
     public static void CheckSAT(Status s)

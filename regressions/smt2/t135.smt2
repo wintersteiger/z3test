@@ -1,3 +1,5 @@
+
+; Copyright (c) 2015 Microsoft Corporation
 ;; NOTE: we disable model validation in this example because
 ;; we don't store the interpretation of division by 0 produced by
 ;; Z3. So, the model validation will fail when a division by 0 is found
@@ -5,7 +7,6 @@
 
 (set-option :auto-config true)
 (set-option :rewriter.hi-div0 true)
-(set-option :old_simplify.bv.hi-div0 true)
 (set-logic QF_UFBV)
 (declare-fun f0 ( (_ BitVec 8) (_ BitVec 6) (_ BitVec 2)) (_ BitVec 7))
 (declare-fun p0 ( (_ BitVec 2)) Bool)
@@ -123,7 +124,6 @@ e106
 (reset)
 (set-option :auto-config true)
 (set-option :rewriter.hi-div0 false)
-(set-option :old_simplify.bv.hi-div0 false)
 (set-logic QF_UFBV)
 (declare-fun f0 ( (_ BitVec 8) (_ BitVec 6) (_ BitVec 2)) (_ BitVec 7))
 (declare-fun p0 ( (_ BitVec 2)) Bool)
@@ -242,7 +242,6 @@ e106
 (reset)
 (set-option :auto-config false)
 (set-option :rewriter.hi-div0 true)
-(set-option :old_simplify.bv.hi-div0 true)
 (set-logic QF_UFBV)
 (declare-fun f0 ( (_ BitVec 8) (_ BitVec 6) (_ BitVec 2)) (_ BitVec 7))
 (declare-fun p0 ( (_ BitVec 2)) Bool)
@@ -361,7 +360,6 @@ e106
 (reset)
 (set-option :auto-config false)
 (set-option :rewriter.hi-div0 false)
-(set-option :old_simplify.bv.hi-div0 false)
 (set-logic QF_UFBV)
 (declare-fun f0 ( (_ BitVec 8) (_ BitVec 6) (_ BitVec 2)) (_ BitVec 7))
 (declare-fun p0 ( (_ BitVec 2)) Bool)

@@ -154,6 +154,9 @@ namespace SubmissionLib
                                                            "Binary INT NOT NULL, " +
                                                            "Parameters VARCHAR(512), " +
                                                            "Cluster VARCHAR(512), " +
+                                                           "JobTemplate VARCHAR(256), " +
+                                                           "JobTimeout INT, " +
+                                                           "TaskTimeout INT, " +
                                                            "Nodegroup VARCHAR(256), " +
                                                            "Locality VARCHAR(256), " +
                                                            "Creator VARCHAR(256) NOT NULL DEFAULT USER_NAME()," +
@@ -330,6 +333,7 @@ namespace SubmissionLib
                                    string parameters, string cluster, string nodegroup, string locality,
                                    string limitsMin, string limitsMax,
                                    string username, int priority, string extension, string note,
+                                   string jobTemplate, int jobTimeout, int taskTimeout,
                                    ref bool haveBinId, ref int binId, ref string sExecutor)
         {
             // Wait for binID
@@ -387,13 +391,27 @@ namespace SubmissionLib
             cmd.CommandTimeout = 0;
             cmd.ExecuteNonQuery();
 
+            if (jobTemplate != null && jobTemplate != "") {
+                cmd = new SqlCommand("UPDATE Experiments SET JobTemplate='" + jobTemplate + "' WHERE ID='" + newID.ToString() + "'", sql);
+                cmd.CommandTimeout = 0;
+                cmd.ExecuteNonQuery();
+            }
+
+            cmd = new SqlCommand("UPDATE Experiments SET JobTimeout='" + jobTimeout + "',TaskTimeout='" + taskTimeout + "' WHERE ID='" + newID.ToString() + "'", sql);
+            cmd.CommandTimeout = 0;
+            cmd.ExecuteNonQuery();
+
             return newID;
         }
 
-        public void SubmitCatchall(string db, string cluster, string locality, int priority, string nodegroup, string executor, string min, string max)
+        public void SubmitCatchall(string db, string cluster, string locality, int priority, string nodegroup, string executor, string min, string max, string jobTemplate, int jobTimeout, int taskTimeout)
         {            
             scheduler.Connect(cluster);
             ISchedulerJob hpcJob = scheduler.CreateJob();
+            if (jobTemplate != null) 
+                hpcJob.SetJobTemplate(jobTemplate);
+            if (jobTimeout != 0)
+                hpcJob.Runtime = jobTimeout;
             try
             {
                 if (nodegroup != "<Any>")
@@ -403,7 +421,6 @@ namespace SubmissionLib
                 hpcJob.CanPreempt = true;
                 SetPriority(hpcJob, priority);
                 hpcJob.Project = "Z3";
-                hpcJob.Runtime = 604800; /* 1 week */
 
                 uint fmin = 0;
                 uint fmax = 0;
@@ -456,7 +473,7 @@ namespace SubmissionLib
                     task.IsExclusive = false;
                     task.IsRerunnable = true;
                     task.Name = "Worker";
-                    task.Runtime = 86400; /* 1 day */
+                    task.Runtime = taskTimeout;
 
                     hpcJob.AddTask(task);
                 }
@@ -473,7 +490,10 @@ namespace SubmissionLib
 
         public void SubmitHPCJob(string db, bool isNew, int newID, string cluster, string nodegroup, int priority,
                                  string locality, string limitsMin, string limitsMax, string sharedDir,
-                                 string executor, int nworkers = 0)
+                                 string executor, 
+                                 string jobTemplate,
+                                 int jobTimeout, int taskTimeout,
+                                 int nworkers = 0)
         {
             string limitsMinTrimmed = limitsMin.Trim();
             string limitsMaxTrimmed = limitsMax.Trim();
@@ -483,6 +503,10 @@ namespace SubmissionLib
 
             scheduler.Connect(cluster);
             ISchedulerJob hpcJob = scheduler.CreateJob();
+            if (jobTemplate != null) hpcJob.SetJobTemplate(jobTemplate);
+            if (jobTimeout != 0) hpcJob.Runtime = jobTimeout;
+            hpcJob.FailOnTaskFailure = false;
+
             try
             {
                 if (nodegroup != "<Any>")
@@ -548,7 +572,9 @@ namespace SubmissionLib
                 //populateTask.CommandLine = executor + " " + newID + " ? \"" + db + "\"";
                 populateTask.CommandLine = "pushd " + sharedDir + " & " + Path.GetFileName(executor) + " " + newID + " ? \"" + db + "\"";
                 populateTask.Name = "Populate";
-                hpcJob.AddTask(populateTask);
+                if (taskTimeout != 0) populateTask.Runtime = taskTimeout;
+                populateTask.FailJobOnFailure = true;
+                hpcJob.AddTask(populateTask);                
 
                 for (int i = 0; i < max; i++)
                 {
@@ -563,7 +589,8 @@ namespace SubmissionLib
                     task.IsRerunnable = true;
                     task.DependsOn.Add("Populate");
                     task.Name = "Worker";
-
+                    if (taskTimeout != 0) task.Runtime = taskTimeout;
+                    populateTask.FailJobOnFailure = false;
                     hpcJob.AddTask(task);
                 }
 
@@ -578,6 +605,8 @@ namespace SubmissionLib
                 rTask.CommandLine = "pushd " + sharedDir + " & " + Path.GetFileName(executor) + " " + newID  + " ! \"" + db + "\"";
                 rTask.DependsOn.Add("Worker");
                 rTask.Name = "Recovery";
+                if (taskTimeout != 0) rTask.Runtime = taskTimeout;
+                rTask.FailJobOnFailure = true;
                 hpcJob.AddTask(rTask);
 
                 // Add deletion task.
@@ -591,6 +620,8 @@ namespace SubmissionLib
                 dTask.CommandLine = "pushd " + sharedDir + " & del " + Path.GetFileName(executor);
                 dTask.Name = "Delete worker";
                 dTask.DependsOn.Add("Recovery");
+                if (taskTimeout != 0) dTask.Runtime = taskTimeout;
+                dTask.FailJobOnFailure = false;
                 hpcJob.AddTask(dTask);
 
                 scheduler.AddJob(hpcJob);
@@ -608,7 +639,14 @@ namespace SubmissionLib
                 cmd = new SqlCommand("DELETE FROM JobQueue WHERE ExperimentID=" + newID + "; DELETE FROM Experiments WHERE ID=" + newID, sql);
                 cmd.CommandTimeout = 0;
                 cmd.ExecuteNonQuery();
-                scheduler.CancelJob(hpcJob.Id, "Aborted.");
+                if (hpcJob.State == JobState.Configuring ||
+                    hpcJob.State == JobState.ExternalValidation ||
+                    hpcJob.State == JobState.Queued ||                     
+                    hpcJob.State == JobState.Running ||
+                    hpcJob.State == JobState.Submitted ||
+                    hpcJob.State == JobState.Validating)
+                    try { scheduler.CancelJob(hpcJob.Id, "Aborted."); }
+                    catch (Exception) { }                    
                 throw ex;
             }
 
@@ -831,7 +869,7 @@ namespace SubmissionLib
             fromSQL.Close();
         }
 
-        public void Reinforce(string DB, int jobID, string reinforcementCluster, int nworkers, int priority)
+        public void Reinforce(string DB, int jobID, string reinforcementCluster, int nworkers, int priority, string jobTemplate, int jobTimeout, int taskTimeout)
         {
             ReportProgress(0);
 
@@ -849,7 +887,7 @@ namespace SubmissionLib
 
                 r.Close();
 
-                SubmitHPCJob(DB, false, jobID, reinforcementCluster, nodegroup, priority, locality, "1", nworkers.ToString(), sharedDir, executor);
+                SubmitHPCJob(DB, false, jobID, reinforcementCluster, nodegroup, priority, locality, "1", nworkers.ToString(), sharedDir, executor, jobTemplate, jobTimeout, taskTimeout);
 
                 ReportProgress(100);
             }
@@ -899,7 +937,7 @@ namespace SubmissionLib
             return s;
         }
 
-        public void SubmitHPCRecoveryJob(string db, int eid, string cluster, int priority, int nworkers, string executor)
+        public void SubmitHPCRecoveryJob(string db, int eid, string cluster, int priority, int nworkers, string executor, string jobTemplate, int jobTimeout, int taskTimeout)
         {
             SqlConnection sql = Connect(db);
             SqlCommand cmd = new SqlCommand("SELECT * FROM Experiments WHERE ID=" + eid, sql);
@@ -938,6 +976,9 @@ namespace SubmissionLib
             scheduler.Connect(cluster);
 
             ISchedulerJob hpcJob = scheduler.CreateJob();
+            if (jobTemplate != null) hpcJob.SetJobTemplate(jobTemplate);
+            if (jobTimeout != 0) hpcJob.Runtime = jobTimeout;
+
             try
             {
                 if (nodegroup != "<Any>")
@@ -970,6 +1011,8 @@ namespace SubmissionLib
                 populateTask.WorkDirectory = sharedDir;
                 populateTask.CommandLine = sExecutor + " " + eid + " * \"" + db + "\""; // * means recovery
                 populateTask.Name = "Populate";
+                if (taskTimeout != 0) populateTask.Runtime = taskTimeout;
+                populateTask.FailJobOnFailure = true;
                 hpcJob.AddTask(populateTask);
 
                 for (int i = 0; i < max; i++)
@@ -984,7 +1027,8 @@ namespace SubmissionLib
                     task.IsRerunnable = true;
                     task.DependsOn.Add("Populate");
                     task.Name = "Worker";
-
+                    task.FailJobOnFailure = false;
+                    if (taskTimeout != 0) task.Runtime = taskTimeout;
                     hpcJob.AddTask(task);
                 }
 
@@ -1000,6 +1044,8 @@ namespace SubmissionLib
                 dTask.CommandLine = "del " + sharedDir + "\\" + executor;
                 dTask.Name = "Delete worker";
                 dTask.DependsOn.Add("Worker");
+                if (taskTimeout != 0) dTask.Runtime = taskTimeout;
+                dTask.FailJobOnFailure = false;
                 hpcJob.AddTask(dTask);
 
                 scheduler.AddJob(hpcJob);

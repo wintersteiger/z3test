@@ -35,13 +35,20 @@ namespace ClusterExperiment
         cmbPriority.SelectedIndex = (int)Registry.GetValue(keyName, "RecoveryPriority", (int)2);
         string default_excutor = (string)Registry.GetValue(keyName, "Executable", "");
         txtExecutor.Text = (string)Registry.GetValue(keyName, "RecoveryExecutor", default_excutor);
+        txtJobTemplate.Text = (string)Registry.GetValue(keyName, "RecoveryJobTemplate", "");
+        timeJob.Value = new TimeSpan(0, 0, (int)Registry.GetValue(keyName, "RecoveryJobTimeout", 43200));
+        timeTask.Value = new TimeSpan(0, 0, (int)Registry.GetValue(keyName, "RecoveryTaskTimeout", 0));
       }
+
       private void okButton_Click(object sender, RoutedEventArgs e)
       {
         Registry.SetValue(keyName, "RecoveryCluster", txtRCluster.Text, RegistryValueKind.String);
         Registry.SetValue(keyName, "RecoveryNumWorkers", txtNumWorkers.Text, RegistryValueKind.String);
         Registry.SetValue(keyName, "RecoveryPriority", cmbPriority.SelectedIndex, RegistryValueKind.DWord);
         Registry.SetValue(keyName, "RecoveryExecutor", txtExecutor.Text, RegistryValueKind.String);
+        Registry.SetValue(keyName, "RecoveryJobTemplate", txtJobTemplate.Text, RegistryValueKind.String);
+        Registry.SetValue(keyName, "RecoveryJobTimeout", (timeJob.Value.HasValue ? Convert.ToInt32(timeJob.Value.Value.TotalSeconds) : 0), RegistryValueKind.DWord);
+        Registry.SetValue(keyName, "RecoveryTaskTimeout", (timeTask.Value.HasValue ? Convert.ToInt32(timeTask.Value.Value.TotalSeconds) : 0), RegistryValueKind.DWord);
         
         DialogResult = true;
       }

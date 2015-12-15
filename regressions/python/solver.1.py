@@ -1,3 +1,5 @@
+
+# Copyright (c) 2015 Microsoft Corporation
 """
 >>> from z3 import *
 >>> s = Solver()
@@ -17,7 +19,7 @@ unsat
 >>> s.check()
 sat
 >>> s.sexpr()
-'(solver)'
+''
 >>> s.add(False)
 >>> s.check()
 unsat
